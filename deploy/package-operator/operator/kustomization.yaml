@@ -3,7 +3,7 @@ kind: Kustomization
 namespace: observability-operator
 images:
 - name: observability-operator
-  newName: observability-operator
+  newName: quay.io/rh-ee-criolo/observability-operator
   newTag: 1.5.2
 commonAnnotations:
   package-operator.run/phase: operator

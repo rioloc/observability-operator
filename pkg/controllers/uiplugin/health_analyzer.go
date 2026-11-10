@@ -16,14 +16,19 @@ import (
 )
 
 const (
-	name                      = "health-analyzer"
-	volumeMountName           = name + "-tls"
-	componentConfigVolumeName = "components-health-config"
-	componentConfigMapName    = "components-config"
+	name                             = "health-analyzer"
+	volumeMountName                  = name + "-tls"
+	componentConfigVolumeName        = "components-health-config"
+	componentConfigMapName           = "components-config"
+	incidentRulesConfigMapName       = "cluster-health-analyzer-default-rules"
+	customIncidentRulesConfigMapName = "cluster-health-analyzer-custom-rules"
 )
 
 //go:embed config/health-analyzer.yaml
 var componentHealthConfig string
+
+//go:embed config/health-analyzer-incident-rules.yaml
+var incidentRulesConfig string
 
 func newHealthAnalyzerPrometheusRole(namespace string) *rbacv1.Role {
 	role := &rbacv1.Role{
@@ -289,6 +294,76 @@ func newHealthAnalyzerServiceMonitor(namespace string) *monv1.ServiceMonitor {
 	}
 
 	return serviceMonitor
+}
+
+// newIncidentRulesConfigMap deploys the default incident grouping rules.
+// The cluster-health-analyzer requires a valid rules.yaml at startup and
+// crashes without it.
+func newIncidentRulesConfigMap(namespace string) *v1.ConfigMap {
+	return &v1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: v1.SchemeGroupVersion.String(),
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      incidentRulesConfigMapName,
+			Labels:    componentLabels(name),
+		},
+		Data: map[string]string{
+			"rules.yaml": incidentRulesConfig,
+		},
+	}
+}
+
+// newIncidentRulesRole grants the health-analyzer service account read
+// access to the default and custom incident rules ConfigMaps in its own
+// namespace. The custom ConfigMap is user-owned; the operator only grants
+// read access to it, it never reconciles it.
+func newIncidentRulesRole(namespace string) *rbacv1.Role {
+	return &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: rbacv1.SchemeGroupVersion.String(),
+			Kind:       "Role",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-health-analyzer-rules",
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{""},
+				Resources:     []string{"configmaps"},
+				ResourceNames: []string{incidentRulesConfigMapName, customIncidentRulesConfigMapName},
+				Verbs:         []string{"get", "list", "watch"},
+			},
+		},
+	}
+}
+
+func newIncidentRulesRoleBinding(namespace, serviceAccountName string) *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: rbacv1.SchemeGroupVersion.String(),
+			Kind:       "RoleBinding",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "cluster-health-analyzer-rules",
+			Namespace: namespace,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.SchemeGroupVersion.Group,
+			Kind:     "Role",
+			Name:     "cluster-health-analyzer-rules",
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      serviceAccountName,
+				Namespace: namespace,
+			},
+		},
+	}
 }
 
 // newComponentHealthConfig creates a new ConfigMap

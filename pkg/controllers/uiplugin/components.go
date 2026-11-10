@@ -149,6 +149,9 @@ func pluginComponentReconcilers(plugin *uiv1alpha1.UIPlugin, pluginInfo UIPlugin
 			reconciler.NewOptionalUpdater(componentsHealthClusterRole("components-health-view"), plugin, deployHealthAnalyzer),
 			reconciler.NewOptionalUpdater(newClusterRoleBinding(namespace, serviceAccountName, "components-health-view", plugin.Name+"-"+"components-health-view"), plugin, deployHealthAnalyzer),
 			reconciler.NewOptionalUpdater(newComponentHealthConfig(namespace), plugin, deployHealthAnalyzer),
+			reconciler.NewOptionalUpdater(newIncidentRulesConfigMap(namespace), plugin, deployHealthAnalyzer),
+			reconciler.NewOptionalUpdater(newIncidentRulesRole(namespace), plugin, deployHealthAnalyzer),
+			reconciler.NewOptionalUpdater(newIncidentRulesRoleBinding(namespace, serviceAccountName), plugin, deployHealthAnalyzer),
 		)
 
 		components = append(components,
